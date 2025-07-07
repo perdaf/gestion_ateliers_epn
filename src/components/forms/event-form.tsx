@@ -57,7 +57,7 @@ export const EventForm: React.FC<EventFormProps> = ({
       date_debut: new Date(),
       date_fin: new Date(new Date().getTime() + 60 * 60 * 1000), // 1 hour later
       atelierId: '',
-      porteurProjetId: '',
+      porteurProjetIds: [],
       animateursIds: [],
     },
   });
@@ -84,7 +84,7 @@ export const EventForm: React.FC<EventFormProps> = ({
       date_debut_serie: new Date(),
       date_fin_serie: new Date(new Date().setMonth(new Date().getMonth() + 1)), // 1 month later
       atelierId: '',
-      porteurProjetId: '',
+      porteurProjetIds: [],
       animateursIds: [],
     },
   });
@@ -92,14 +92,12 @@ export const EventForm: React.FC<EventFormProps> = ({
   // Add useEffect to ensure nth_of_month is set when frequency is MENSUELLE
   useEffect(() => {
     if (currentFrequence === 'MENSUELLE') {
-      // If nth_of_month is not set, set it to a default value (2 for "second")
+      // If nth_of_month is not set, set it to a default value (1 for "first")
       try {
         const formValues = getValuesRecurrent();
-        console.log('Current form values:', formValues);
         
         if (!formValues.nth_of_month) {
-          console.log('Setting default nth_of_month value for MENSUELLE frequency');
-          setValueRecurrent('nth_of_month', 2);
+          setValueRecurrent('nth_of_month', 1);
           // Trigger validation after setting the value
           setTimeout(() => {
             triggerRecurrent('nth_of_month');
@@ -221,19 +219,37 @@ export const EventForm: React.FC<EventFormProps> = ({
                   const frequence = regle.frequence;
                   setCurrentFrequence(frequence);
                   
+                  // Ensure nth_of_month is properly handled
+                  let nthOfMonth = undefined;
+                  if (regle.nth_of_month !== null && regle.nth_of_month !== undefined) {
+                    nthOfMonth = Number(regle.nth_of_month);
+                  } else if (frequence === 'MENSUELLE') {
+                    // Default for monthly frequency
+                    nthOfMonth = 1;
+                  }
+                  
                   resetRecurrent({
                     titre: regle.titre,
                     heure_debut: regle.heure_debut,
                     heure_fin: regle.heure_fin,
                     frequence: frequence,
                     jours_semaine: regle.jours_semaine.split(',').map(Number),
-                    nth_of_month: regle.nth_of_month || undefined,
+                    nth_of_month: nthOfMonth,
                     date_debut_serie: new Date(regle.date_debut_serie),
                     date_fin_serie: new Date(regle.date_fin_serie),
                     atelierId: regle.atelierId,
-                    porteurProjetId: regle.porteurProjetId,
+                    porteurProjetIds: regle.porteurProjetId ? [regle.porteurProjetId] : [],
                     animateursIds: animateursIds,
                   });
+                  
+                  // Verify form values after reset
+                  setTimeout(() => {
+                    try {
+                      getValuesRecurrent();
+                    } catch (error) {
+                      console.error('Error getting form values after reset:', error);
+                    }
+                  }, 100);
                   
                   // Store the regleRecurrenceId in initialData if it wasn't there
                   if (!initialData.regleRecurrenceId) {
@@ -271,54 +287,95 @@ export const EventForm: React.FC<EventFormProps> = ({
       // Create a copy of the data to avoid modifying the original
       const submissionData = { ...data };
       
-      console.log('Form data before submission:', submissionData);
+      console.log('handleFormSubmit - Original data:', {
+        nth_of_month: data.nth_of_month,
+        frequence: data.frequence,
+        fullData: JSON.stringify(data, null, 2)
+      });
       
       // Ensure frequency is set for recurring events
       if (isRecurrent) {
         // If frequency is empty or undefined, use the current frequency
         if (!submissionData.frequence || submissionData.frequence === '') {
           submissionData.frequence = currentFrequence;
-          console.log('Setting frequency from currentFrequence:', currentFrequence);
         }
         
         // If this is a monthly recurrence with nth_of_month set, ensure frequency is MENSUELLE
         if (submissionData.nth_of_month !== undefined && submissionData.nth_of_month !== null) {
           submissionData.frequence = 'MENSUELLE';
-          console.log('Setting frequency to MENSUELLE because nth_of_month is set:', submissionData.nth_of_month);
+          
+          // Ensure nth_of_month is a number
+          if (typeof submissionData.nth_of_month === 'string') {
+            submissionData.nth_of_month = Number(submissionData.nth_of_month);
+          }
         }
         
         // For MENSUELLE frequency, ensure nth_of_month is set
-        if (submissionData.frequence === 'MENSUELLE' &&
-            (submissionData.nth_of_month === undefined || submissionData.nth_of_month === null)) {
-          // Set a default value of 2 (second occurrence)
-          submissionData.nth_of_month = 2;
-          console.log('Setting default nth_of_month for MENSUELLE frequency:', submissionData.nth_of_month);
+        if (submissionData.frequence === 'MENSUELLE') {
+          // If nth_of_month is missing, set a default value of 1 (first occurrence)
+          if (submissionData.nth_of_month === undefined || submissionData.nth_of_month === null) {
+            submissionData.nth_of_month = 1;
+          }
+          // If nth_of_month is a string, convert it to a number
+          else if (typeof submissionData.nth_of_month === 'string') {
+            submissionData.nth_of_month = Number(submissionData.nth_of_month);
+          }
         }
       }
       
-      console.log('Form data after adjustments:', submissionData);
-      
-      // If converting from recurring to non-recurring, pass the original recurrence rule ID
-      if (isConvertingToUnique && initialData?.regleRecurrenceId) {
-        onSubmit({
-          ...submissionData,
-          isRecurrent: false,
-          _isRecurrentEvent: false,
-          convertFromRecurrent: true,
-          regleRecurrenceId: initialData.regleRecurrenceId,
-          originalEventId: initialData.id
-        });
-      } else {
-        onSubmit({
-          ...submissionData,
-          id: initialData?.id, // Make sure to pass the ID for updates
-          isRecurrent,
-          _isRecurrentEvent: isRecurrent,
-          regleRecurrenceId: initialData?.regleRecurrenceId
-        });
+      // Validate porteurProjetIds
+      if (!submissionData.porteurProjetIds || !Array.isArray(submissionData.porteurProjetIds)) {
+        console.error('porteurProjetIds is not an array:', submissionData.porteurProjetIds);
+        submissionData.porteurProjetIds = [];
       }
-    } catch (error) {
-      console.error('Error in form submission:', error);
+      
+      // Convert porteurProjetIds array to porteurProjetId string (take the first one)
+      if (submissionData.porteurProjetIds.length > 0) {
+        submissionData.porteurProjetId = submissionData.porteurProjetIds[0];
+        console.log('Setting porteurProjetId from first selected porteur:', submissionData.porteurProjetId);
+      } else {
+        console.error('No porteur de projet selected');
+        throw new Error('Veuillez sélectionner au moins un porteur de projet');
+      }
+      
+      // Keep both porteurProjetId and porteurProjetIds for compatibility
+      // The API will use porteurProjetIds[0] if porteurProjetId is not available
+      
+      try {
+        // If converting from recurring to non-recurring, pass the original recurrence rule ID
+        if (isConvertingToUnique && initialData?.regleRecurrenceId) {
+          console.log('Submitting as conversion from recurring to unique event');
+          onSubmit({
+            ...submissionData,
+            isRecurrent: false,
+            _isRecurrentEvent: false,
+            convertFromRecurrent: true,
+            regleRecurrenceId: initialData.regleRecurrenceId,
+            originalEventId: initialData.id
+          });
+        } else {
+          console.log('Submitting normal event with isRecurrent:', isRecurrent);
+          const finalSubmissionData = {
+            ...submissionData,
+            id: initialData?.id, // Make sure to pass the ID for updates
+            isRecurrent,
+            _isRecurrentEvent: isRecurrent,
+            regleRecurrenceId: initialData?.regleRecurrenceId
+          };
+          console.log('Final submission data:', {
+            nth_of_month: finalSubmissionData.nth_of_month,
+            frequence: finalSubmissionData.frequence,
+            fullData: JSON.stringify(finalSubmissionData, null, 2)
+          });
+          onSubmit(finalSubmissionData);
+        }
+      } catch (submitError: any) {
+        console.error('Error during onSubmit callback:', submitError);
+        alert(`Erreur lors de la soumission du formulaire: ${submitError?.message || 'Erreur inconnue'}`);
+      }
+    } catch (error: any) {
+      console.error('Error in form submission preparation:', error);
+      alert(`Erreur lors de la préparation du formulaire: ${error?.message || 'Erreur inconnue'}`);
     }
   };
 
@@ -360,7 +417,7 @@ export const EventForm: React.FC<EventFormProps> = ({
           date_debut: initialData.date_debut,
           date_fin: initialData.date_fin,
           atelierId: initialData.atelierId,
-          porteurProjetId: initialData.porteurProjetId,
+          porteurProjetIds: initialData.porteurProjetId ? [initialData.porteurProjetId] : [],
           animateursIds: animateursIds,
         });
       }
@@ -401,14 +458,32 @@ export const EventForm: React.FC<EventFormProps> = ({
               setValueRecurrent('frequence', 'MENSUELLE');
               // Update the data object directly
               data.frequence = 'MENSUELLE';
-              console.log('Pre-submission: Force set frequency to MENSUELLE');
               
               // Ensure nth_of_month is set for MENSUELLE frequency
               if (data.nth_of_month === undefined || data.nth_of_month === null) {
-                // Set a default value of 2 (second occurrence)
-                setValueRecurrent('nth_of_month', 2);
-                data.nth_of_month = 2;
-                console.log('Pre-submission: Set default nth_of_month to 2');
+                // Set a default value of 1 (first occurrence)
+                setValueRecurrent('nth_of_month', 1);
+                data.nth_of_month = 1;
+              } else {
+                // Always ensure nth_of_month is a number
+                if (typeof data.nth_of_month === 'string') {
+                  data.nth_of_month = Number(data.nth_of_month);
+                }
+              }
+            } else if (data.frequence === 'MENSUELLE') {
+              // If frequency is MENSUELLE but nth_of_month is not set, ensure it's set
+              if (data.nth_of_month === undefined || data.nth_of_month === null) {
+                setValueRecurrent('nth_of_month', 1);
+                data.nth_of_month = 1;
+              }
+            }
+            
+            // CRITICAL: Ensure nth_of_month is explicitly included in the submission data
+            if (data.frequence === 'MENSUELLE') {
+              if (data.nth_of_month === undefined || data.nth_of_month === null) {
+                data.nth_of_month = 1;
+              } else if (typeof data.nth_of_month === 'string') {
+                data.nth_of_month = Number(data.nth_of_month);
               }
             }
             
@@ -423,8 +498,11 @@ export const EventForm: React.FC<EventFormProps> = ({
               console.log('Converted date_fin_serie to Date object:', data.date_fin_serie);
             }
             
-            // Log the data before submission
-            console.log('Form data before submission:', data);
+            console.log('Form submit handler - data before handleFormSubmit:', {
+              nth_of_month: data.nth_of_month,
+              frequence: data.frequence,
+              typeof_nth_of_month: typeof data.nth_of_month
+            });
             
             // Proceed with form submission
             handleFormSubmit(data);
@@ -479,7 +557,6 @@ export const EventForm: React.FC<EventFormProps> = ({
                 <select
                   value={field.value}
                   onChange={(e) => {
-                    console.log('Frequency changed to:', e.target.value);
                     field.onChange(e.target.value);
                     setCurrentFrequence(e.target.value as 'QUOTIDIENNE' | 'HEBDOMADAIRE' | 'MENSUELLE');
                     
@@ -488,8 +565,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                       try {
                         const formValues = getValuesRecurrent();
                         if (!formValues.nth_of_month) {
-                          setValueRecurrent('nth_of_month', 2); // Default to "second"
-                          console.log('Set default nth_of_month to 2 (second)');
+                          setValueRecurrent('nth_of_month', 1); // Default to "first"
                           // Trigger validation
                           setTimeout(() => {
                             triggerRecurrent('nth_of_month');
@@ -498,19 +574,11 @@ export const EventForm: React.FC<EventFormProps> = ({
                       } catch (error) {
                         console.error('Error getting form values:', error);
                         // Set default value anyway
-                        setValueRecurrent('nth_of_month', 2);
+                        setValueRecurrent('nth_of_month', 1);
                       }
                     } else {
                       // If changing away from MENSUELLE, clear the nth_of_month value
                       setValueRecurrent('nth_of_month', undefined);
-                    }
-                    
-                    // Log the current form values after the change
-                    try {
-                      const formValues = getValuesRecurrent();
-                      console.log('Current form values after frequency change:', formValues);
-                    } catch (error) {
-                      console.error('Error getting form values:', error);
                     }
                   }}
                   className="form-select"
@@ -571,32 +639,24 @@ export const EventForm: React.FC<EventFormProps> = ({
 
           {/* Option pour "le Nième jour de la semaine du mois" - toujours visible mais conditionnellement requis */}
           <div className={`mb-4 ${currentFrequence !== 'MENSUELLE' ? 'opacity-50' : ''}`}>
-            <label className="form-label">
-              Occurrence dans le mois
-              {currentFrequence === 'MENSUELLE' && <span className="text-red-500">*</span>}
-            </label>
             <div className="mb-4">
-              <label className="form-label">Occurrence dans le mois <span className="text-red-500">*</span></label>
+              <label className="form-label">Occurrence dans le mois {currentFrequence === 'MENSUELLE' && <span className="text-red-500">*</span>}</label>
               <Controller
                 control={controlRecurrent}
                 name="nth_of_month"
                 render={({ field }) => (
                   <select
-                    value={field.value === undefined ? '2' : String(field.value)}
+                    value={field.value === undefined ? '1' : String(field.value)}
                     onChange={(e) => {
-                      console.log('nth_of_month changed to:', e.target.value);
-                      
                       // First set the frequency to MENSUELLE before updating nth_of_month
                       if (e.target.value !== '') {
                         setValueRecurrent('frequence', 'MENSUELLE');
                         setCurrentFrequence('MENSUELLE');
-                        console.log('Set frequency to MENSUELLE');
                       }
                       
-                      // Then update the nth_of_month field value
+                      // Then update the nth_of_month field value - ALWAYS as a number
                       const numValue = Number(e.target.value);
                       field.onChange(numValue);
-                      console.log(`Set nth_of_month to ${numValue} (${typeof numValue})`);
                       
                       // Trigger validation
                       setTimeout(() => {
@@ -604,17 +664,9 @@ export const EventForm: React.FC<EventFormProps> = ({
                         // Also trigger frequency validation to ensure it's set to MENSUELLE
                         triggerRecurrent('frequence');
                       }, 100);
-                      
-                      // Log the current form values after the change
-                      try {
-                        const formValues = getValuesRecurrent();
-                        console.log('Current form values after nth_of_month change:', formValues);
-                      } catch (error) {
-                        console.error('Error getting form values:', error);
-                      }
                     }}
                     className="form-select"
-                    required
+                    required={currentFrequence === 'MENSUELLE'}
                   >
                     <option value="" disabled>Sélectionnez une occurrence</option>
                     <option value="1">Premier</option>
@@ -664,11 +716,9 @@ export const EventForm: React.FC<EventFormProps> = ({
                       try {
                         // Parse the date string from the input
                         const dateStr = e.target.value;
-                        console.log('Raw date string:', dateStr);
                         
                         // Create a new date object
                         const newDate = new Date(dateStr);
-                        console.log('Date de fin changed to:', newDate);
                         
                         // Ensure it's a valid date
                         if (isNaN(newDate.getTime())) {
@@ -720,26 +770,37 @@ export const EventForm: React.FC<EventFormProps> = ({
           </div>
 
           <div className="mb-4">
-            <label className="form-label">Porteur de projet</label>
+            <label className="form-label">Porteurs de projet</label>
             <Controller
               control={controlRecurrent}
-              name="porteurProjetId"
+              name="porteurProjetIds"
               render={({ field }) => (
-                <CustomSelect
-                  options={agents
-                    .filter((agent) => agent.role === 'PORTEUR_PROJET' || agent.role === 'ADMIN')
-                    .map(agent => ({
-                      value: agent.id,
-                      label: `${agent.prenom} ${agent.nom}`
-                    }))}
-                  value={field.value}
-                  onChange={field.onChange}
-                  placeholder="Sélectionner un porteur de projet"
-                />
+                <div className="max-h-40 overflow-y-auto border rounded p-2">
+                  {agents.map((agent) => (
+                    <label key={agent.id} className="flex items-center mb-1">
+                      <input
+                        type="checkbox"
+                        value={agent.id}
+                        checked={Array.isArray(field.value) && field.value.includes(agent.id)}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          const newValue = e.target.checked
+                            ? [...(Array.isArray(field.value) ? field.value : []), value]
+                            : Array.isArray(field.value) ? field.value.filter((v: string) => v !== value) : [];
+                          field.onChange(newValue);
+                        }}
+                        className="form-checkbox mr-2"
+                      />
+                      <span>
+                        {agent.prenom} {agent.nom}
+                      </span>
+                    </label>
+                  ))}
+                </div>
               )}
             />
-            {errorsRecurrent.porteurProjetId && (
-              <p className="text-red-500 text-sm">{String(errorsRecurrent.porteurProjetId.message)}</p>
+            {errorsRecurrent.porteurProjetIds && (
+              <p className="text-red-500 text-sm">{String(errorsRecurrent.porteurProjetIds.message)}</p>
             )}
           </div>
 
@@ -872,26 +933,37 @@ export const EventForm: React.FC<EventFormProps> = ({
           </div>
 
           <div className="mb-4">
-            <label className="form-label">Porteur de projet</label>
+            <label className="form-label">Porteurs de projet</label>
             <Controller
               control={controlUnique}
-              name="porteurProjetId"
+              name="porteurProjetIds"
               render={({ field }) => (
-                <CustomSelect
-                  options={agents
-                    .filter((agent) => agent.role === 'PORTEUR_PROJET' || agent.role === 'ADMIN')
-                    .map(agent => ({
-                      value: agent.id,
-                      label: `${agent.prenom} ${agent.nom}`
-                    }))}
-                  value={field.value}
-                  onChange={field.onChange}
-                  placeholder="Sélectionner un porteur de projet"
-                />
+                <div className="max-h-40 overflow-y-auto border rounded p-2">
+                  {agents.map((agent) => (
+                    <label key={agent.id} className="flex items-center mb-1">
+                      <input
+                        type="checkbox"
+                        value={agent.id}
+                        checked={Array.isArray(field.value) && field.value.includes(agent.id)}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          const newValue = e.target.checked
+                            ? [...(Array.isArray(field.value) ? field.value : []), value]
+                            : Array.isArray(field.value) ? field.value.filter((v: string) => v !== value) : [];
+                          field.onChange(newValue);
+                        }}
+                        className="form-checkbox mr-2"
+                      />
+                      <span>
+                        {agent.prenom} {agent.nom}
+                      </span>
+                    </label>
+                  ))}
+                </div>
               )}
             />
-            {errorsUnique.porteurProjetId && (
-              <p className="text-red-500 text-sm">{String(errorsUnique.porteurProjetId.message)}</p>
+            {errorsUnique.porteurProjetIds && (
+              <p className="text-red-500 text-sm">{String(errorsUnique.porteurProjetIds.message)}</p>
             )}
           </div>
 

@@ -6,7 +6,7 @@ export const evenementUniqueSchema = z.object({
   date_debut: z.date(),
   date_fin: z.date(),
   atelierId: z.string({ required_error: "L'atelier est requis" }),
-  porteurProjetId: z.string({ required_error: "Le porteur de projet est requis" }),
+  porteurProjetIds: z.array(z.string()).min(1, 'Au moins un porteur de projet requis'),
   animateursIds: z.array(z.string()).min(1, 'Au moins un animateur requis'),
 }).refine(data => data.date_fin > data.date_debut, {
   message: 'La date de fin doit être après la date de début',
@@ -27,11 +27,17 @@ export const evenementRecurrentSchema = z.object({
     })
     .pipe(z.enum(['QUOTIDIENNE', 'HEBDOMADAIRE', 'MENSUELLE'])),
   jours_semaine: z.array(z.number().min(0).max(6)).min(1, 'Sélectionnez au moins un jour'),
-  nth_of_month: z.number().min(-1).max(5).optional(),
+  nth_of_month: z.union([
+    z.number().min(-1).max(5),
+    z.string().transform(val => {
+      const num = Number(val);
+      return isNaN(num) ? undefined : num;
+    })
+  ]).optional(),
   date_debut_serie: z.date(),
   date_fin_serie: z.date(),
   atelierId: z.string({ required_error: "L'atelier est requis" }),
-  porteurProjetId: z.string({ required_error: "Le porteur de projet est requis" }),
+  porteurProjetIds: z.array(z.string()).min(1, 'Au moins un porteur de projet requis'),
   animateursIds: z.array(z.string()).min(1, 'Au moins un animateur requis'),
 }).refine(data => data.date_fin_serie > data.date_debut_serie, {
   message: 'La date de fin doit être après la date de début de série',
@@ -39,7 +45,11 @@ export const evenementRecurrentSchema = z.object({
 }).refine(data => {
   // Si la fréquence est MENSUELLE et qu'on a sélectionné un jour, nth_of_month est requis
   if (data.frequence === 'MENSUELLE' && data.jours_semaine.length > 0) {
-    return data.nth_of_month !== undefined;
+    // If nth_of_month is missing, set a default value of 1 (first occurrence)
+    if (data.nth_of_month === undefined || data.nth_of_month === null) {
+      data.nth_of_month = 1;
+    }
+    return true;
   }
   return true;
 }, {
@@ -47,10 +57,18 @@ export const evenementRecurrentSchema = z.object({
   path: ['nth_of_month'],
 }).superRefine((data, ctx) => {
   // If nth_of_month is set, ensure frequency is MENSUELLE
-  if (data.nth_of_month !== undefined && data.frequence !== 'MENSUELLE') {
+  if (data.nth_of_month !== undefined && data.nth_of_month !== null && data.frequence !== 'MENSUELLE') {
     // Auto-correct the frequency to MENSUELLE
     data.frequence = 'MENSUELLE';
   }
+  
+  // Ensure nth_of_month is a number if it's defined
+  if (data.nth_of_month !== undefined && data.nth_of_month !== null) {
+    if (typeof data.nth_of_month === 'string') {
+      data.nth_of_month = Number(data.nth_of_month);
+    }
+  }
+  
   return true;
 });
 

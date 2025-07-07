@@ -147,7 +147,6 @@ export default function AgentForm({ agent, onSuccess, onCancel }: AgentFormProps
             {...register('role')}
           >
             <option value={RoleAgent.ANIMATEUR}>Animateur</option>
-            <option value={RoleAgent.PORTEUR_PROJET}>Porteur de projet</option>
             <option value={RoleAgent.ADMIN}>Administrateur</option>
           </select>
           {errors.role && (

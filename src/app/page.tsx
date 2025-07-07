@@ -82,6 +82,8 @@ export default function Home() {
       date_fin: event.end,
       atelierId: event.extendedProps.atelierId,
       porteurProjetId: event.extendedProps.porteurProjetId,
+      // Add porteurProjetIds array for validation
+      porteurProjetIds: event.extendedProps.porteurProjetId ? [event.extendedProps.porteurProjetId] : [],
       animateursIds: event.extendedProps.animateurs.map((a: any) => a.agentId),
       isRecurrent: isRecurrent,
       _isRecurrentEvent: isRecurrent,
@@ -105,6 +107,7 @@ export default function Home() {
       date_fin: selectInfo.end,
       atelierId: '',
       porteurProjetId: '',
+      porteurProjetIds: [], // Add empty porteurProjetIds array for validation
       animateursIds: [],
     });
     setIsEditing(false);
@@ -124,12 +127,19 @@ export default function Home() {
           heure_fin: data.heure_fin,
           frequence: data.frequence,
           jours_semaine: data.jours_semaine,
+          nth_of_month: data.nth_of_month, // AJOUT DE LA LIGNE MANQUANTE
           date_debut_serie: data.date_debut_serie,
           date_fin_serie: data.date_fin_serie,
           atelierId: data.atelierId,
           porteurProjetId: data.porteurProjetId,
+          porteurProjetIds: data.porteurProjetIds || (data.porteurProjetId ? [data.porteurProjetId] : []),
           animateursIds: data.animateursIds,
         };
+        
+        console.log('Payload for recurring event:', {
+          nth_of_month: payload.nth_of_month,
+          frequence: payload.frequence
+        });
 
         if (isEditing && data.regleRecurrenceId) {
           // Update recurring event
@@ -154,6 +164,7 @@ export default function Home() {
           date_fin: data.date_fin,
           atelierId: data.atelierId,
           porteurProjetId: data.porteurProjetId,
+          porteurProjetIds: data.porteurProjetIds || (data.porteurProjetId ? [data.porteurProjetId] : []),
           animateursIds: data.animateursIds,
         };
 

@@ -13,7 +13,6 @@ const frequenceToRRuleFreq: Record<FrequenceRecurrence, Frequency> = {
 
 export async function GET(request: NextRequest) {
   try {
-    console.log('Fetching events...');
     const { searchParams } = new URL(request.url);
     
     // Check if we're fetching a specific event by ID
@@ -76,10 +75,31 @@ export async function GET(request: NextRequest) {
       // Type assertion pour inclure nth_of_month
       const regleWithNth = regle as unknown as (typeof regle & { nth_of_month?: number | null });
       
-      if (regleWithNth.frequence === 'MENSUELLE' && regleWithNth.nth_of_month !== null && regleWithNth.nth_of_month !== undefined) {
+      if (regleWithNth.frequence === 'MENSUELLE') {
+        // Always default to 1 (first occurrence)
+        let nthOfMonth = 1;
+        
+        // If a value is provided in the database, use it
+        if (regleWithNth.nth_of_month !== null && regleWithNth.nth_of_month !== undefined) {
+          // Convert to number if it's a string
+          if (typeof regleWithNth.nth_of_month === 'string') {
+            try {
+              const parsedValue = Number(regleWithNth.nth_of_month);
+              if (!isNaN(parsedValue)) {
+                nthOfMonth = parsedValue;
+              }
+            } catch (error) {
+              console.error(`Error converting nth_of_month to number for single event: ${error}, using default: 1`);
+            }
+          } else if (typeof regleWithNth.nth_of_month === 'number') {
+            nthOfMonth = regleWithNth.nth_of_month;
+          }
+        }
+        
+        
         // Remplacer byweekday avec des objets Weekday qui incluent l'occurrence (n)
         ruleConfig.byweekday = joursSemaine.map(jour => {
-          return new Weekday(jour.weekday, regleWithNth.nth_of_month!);
+          return new Weekday(jour.weekday, nthOfMonth);
         });
       }
       
@@ -148,7 +168,6 @@ export async function GET(request: NextRequest) {
       include: { atelier: true, porteurProjet: true, animateurs: { include: { agent: true } } },
     });
     
-    console.log(`Found ${regles.length} recurrence rules`);
     
     // 3. "Expanser" les règles en événements virtuels pour le calendrier
     const evenementsRecurrents = regles.flatMap(regle => {
@@ -170,7 +189,6 @@ export async function GET(request: NextRequest) {
         }
       });
       
-      console.log(`Processing rule: ${regle.id}, jours: ${regle.jours_semaine}, converted to:`, joursSemaine);
       
       // S'assurer que les dates sont valides et inclure l'heure de début pour dtstart
       const dtstart = new Date(regle.date_debut_serie);
@@ -180,9 +198,6 @@ export async function GET(request: NextRequest) {
       const until = new Date(regle.date_fin_serie);
       until.setHours(23, 59, 59, 999); // Fin de journée pour la date de fin
       
-      // Afficher plus de détails pour le débogage
-      console.log(`Rule config: freq=${frequenceToRRuleFreq[regle.frequence]}, dtstart=${dtstart.toISOString()}, until=${until.toISOString()}`);
-      console.log(`Current date range: start=${start.toISOString()}, end=${end.toISOString()}`);
       
       // Configuration de base pour RRule
       const ruleConfig: any = {
@@ -198,23 +213,42 @@ export async function GET(request: NextRequest) {
       // Type assertion pour inclure nth_of_month
       const regleWithNth = regle as unknown as (typeof regle & { nth_of_month?: number | null });
       
-      if (regleWithNth.frequence === 'MENSUELLE' && regleWithNth.nth_of_month !== null && regleWithNth.nth_of_month !== undefined) {
+      if (regleWithNth.frequence === 'MENSUELLE') {
+        // Always default to 1 (first occurrence)
+        let nthOfMonth = 1;
+        
+        // If a value is provided in the database, use it
+        if (regleWithNth.nth_of_month !== null && regleWithNth.nth_of_month !== undefined) {
+          // Convert to number if it's a string
+          if (typeof regleWithNth.nth_of_month === 'string') {
+            try {
+              const parsedValue = Number(regleWithNth.nth_of_month);
+              if (!isNaN(parsedValue)) {
+                nthOfMonth = parsedValue;
+              }
+            } catch (error) {
+              console.error(`Error converting nth_of_month to number: ${error}, using default: 1`);
+            }
+          } else if (typeof regleWithNth.nth_of_month === 'number') {
+            nthOfMonth = regleWithNth.nth_of_month;
+          }
+        }
+        
+        
         // Remplacer byweekday avec des objets Weekday qui incluent l'occurrence (n)
         ruleConfig.byweekday = joursSemaine.map(jour => {
-          return new Weekday(jour.weekday, regleWithNth.nth_of_month!);
+          return new Weekday(jour.weekday, nthOfMonth);
         });
       }
       
       const rule = new RRule(ruleConfig);
       
-      console.log(`RRule string: ${rule.toString()}`);
 
       // Extend the end date by one day to ensure we capture events that start exactly on the end date
       const extendedEnd = new Date(end);
       extendedEnd.setDate(extendedEnd.getDate() + 1);
       
       const occurrences = rule.between(start, extendedEnd);
-      console.log(`Generated ${occurrences.length} occurrences for rule ${regle.id}`);
       
       return occurrences.map(date => {
         const [startHours, startMinutes] = regle.heure_debut.split(':').map(Number);
@@ -243,7 +277,6 @@ export async function GET(request: NextRequest) {
     });
 
     const allEvents = [...evenementsUniques, ...evenementsRecurrents];
-    console.log(`Returning ${allEvents.length} events (${evenementsUniques.length} unique, ${evenementsRecurrents.length} recurrent)`);
     
     return NextResponse.json({ success: true, data: allEvents });
   } catch (error) {
