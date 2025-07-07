@@ -1,103 +1,293 @@
-import Image from "next/image";
+'use client';
+
+import React, { useState, useRef } from 'react';
+import { CalendarWrapper } from '@/components/calendar/calendar-wrapper';
+import { EventForm } from '@/components/forms/event-form';
+import EventDetails from '@/components/events/event-details';
+import { EventClickArg, DateSelectArg } from '@fullcalendar/core';
+import { format } from 'date-fns';
+import { Modal } from '@/components/ui/modal';
+import { useAppStore } from '@/lib/store';
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [showEventForm, setShowEventForm] = useState(false);
+  const [showEventDetails, setShowEventDetails] = useState(false);
+  const [eventFormData, setEventFormData] = useState<any>(null);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const refreshCalendarRef = useRef<(() => void) | null>(null);
+  
+  // Use the app store to manage edit mode
+  const isEditMode = useAppStore((state) => state.isEditMode);
+  const setEditMode = useAppStore((state) => state.setEditMode);
+  const setEventFormOpen = useAppStore((state) => state.setEventFormOpen);
+  const isEventFormOpen = useAppStore((state) => state.isEventFormOpen);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
+  // Effect to handle edit mode changes
+  React.useEffect(() => {
+    if (isEditMode && selectedEventId) {
+      // When edit mode is activated from event details
+      setShowEventDetails(false);
+      setShowEventForm(true);
+    }
+  }, [isEditMode, selectedEventId]);
+
+  // Effect to handle event form open state changes
+  React.useEffect(() => {
+    setShowEventForm(isEventFormOpen);
+  }, [isEventFormOpen]);
+
+  // Handle event click (show event details)
+  const handleEventClick = (clickInfo: EventClickArg) => {
+    const event = clickInfo.event;
+    
+    // Debug: Log the event details
+    console.log('Event clicked:', {
+      id: event.id,
+      title: event.title,
+      start: event.start,
+      end: event.end,
+      extendedProps: event.extendedProps
+    });
+    
+    // Set editing mode
+    setIsEditing(true);
+    
+    // Check if this is a recurring event by ID format
+    const isRecurrentIdFormat = event.id.includes('-') && /\d{4}-\d{2}-\d{2}T/.test(event.id);
+    let regleRecurrenceId = event.extendedProps.regleRecurrenceId;
+    
+    // If it's a recurring event by ID format but no regleRecurrenceId is set, extract it
+    if (isRecurrentIdFormat && !regleRecurrenceId) {
+      const parts = event.id.split('-');
+      regleRecurrenceId = parts[0];
+      console.log('Extracted regleRecurrenceId from event ID:', regleRecurrenceId);
+    }
+    
+    // Determine if this is a recurring event
+    const isRecurrent = event.extendedProps.isRecurrent ||
+                        event.extendedProps._isRecurrentEvent ||
+                        isRecurrentIdFormat ||
+                        !!regleRecurrenceId;
+    
+    // Set the selected event ID and show the details
+    setSelectedEventId(event.id);
+    setShowEventDetails(true);
+    
+    // Also prepare the form data in case the user wants to edit
+    setEventFormData({
+      id: event.id,
+      titre: event.title,
+      date_debut: event.start,
+      date_fin: event.end,
+      atelierId: event.extendedProps.atelierId,
+      porteurProjetId: event.extendedProps.porteurProjetId,
+      animateursIds: event.extendedProps.animateurs.map((a: any) => a.agentId),
+      isRecurrent: isRecurrent,
+      _isRecurrentEvent: isRecurrent,
+      regleRecurrenceId: regleRecurrenceId
+    });
+    
+    // Debug: Log the event data being prepared
+    console.log('Event data prepared for form:', {
+      id: event.id,
+      isRecurrent: isRecurrent,
+      _isRecurrentEvent: isRecurrent,
+      regleRecurrenceId: regleRecurrenceId
+    });
+  };
+
+  // Handle date selection (create event)
+  const handleDateSelect = (selectInfo: DateSelectArg) => {
+    setEventFormData({
+      titre: '',
+      date_debut: selectInfo.start,
+      date_fin: selectInfo.end,
+      atelierId: '',
+      porteurProjetId: '',
+      animateursIds: [],
+    });
+    setIsEditing(false);
+    setShowEventForm(true);
+  };
+
+  // Handle form submission
+  const handleFormSubmit = async (data: any) => {
+    try {
+      console.log('Form submission data:', data);
+      
+      if (data.isRecurrent) {
+        // Handle recurring event
+        const payload = {
+          titre: data.titre,
+          heure_debut: data.heure_debut,
+          heure_fin: data.heure_fin,
+          frequence: data.frequence,
+          jours_semaine: data.jours_semaine,
+          date_debut_serie: data.date_debut_serie,
+          date_fin_serie: data.date_fin_serie,
+          atelierId: data.atelierId,
+          porteurProjetId: data.porteurProjetId,
+          animateursIds: data.animateursIds,
+        };
+
+        if (isEditing && data.regleRecurrenceId) {
+          // Update recurring event
+          await fetch(`/api/recurrence`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: data.regleRecurrenceId, ...payload }),
+          });
+        } else {
+          // Create new recurring event
+          await fetch(`/api/recurrence`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+        }
+      } else {
+        // Handle one-time event
+        const payload = {
+          titre: data.titre,
+          date_debut: data.date_debut,
+          date_fin: data.date_fin,
+          atelierId: data.atelierId,
+          porteurProjetId: data.porteurProjetId,
+          animateursIds: data.animateursIds,
+        };
+
+        if (data.convertFromRecurrent && data.regleRecurrenceId) {
+          // Converting a recurring event to a unique event
+          // First create the unique event
+          const createResponse = await fetch(`/api/evenements-uniques`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          
+          if (!createResponse.ok) {
+            throw new Error('Erreur lors de la création de l\'événement unique');
+          }
+          
+          // Then create an exception for this occurrence in the recurrence rule
+          // This is optional and depends on your business logic
+          // You might want to add an API endpoint to handle exceptions in recurrence rules
+        } else if (isEditing && data.id) {
+          console.log('Updating existing event with ID:', data.id);
+          
+          // Update one-time event
+          const updateResponse = await fetch(`/api/evenements-uniques`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: data.id, ...payload }),
+          });
+          
+          if (!updateResponse.ok) {
+            throw new Error('Erreur lors de la mise à jour de l\'événement');
+          }
+          
+          console.log('Event updated successfully');
+        } else {
+          // Create new one-time event
+          await fetch(`/api/evenements-uniques`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+        }
+      }
+
+      // Close the form and refresh the calendar
+      setShowEventForm(false);
+      
+      // Explicitly refresh the calendar to show the new event
+      if (refreshCalendarRef.current) {
+        refreshCalendarRef.current();
+      }
+    } catch (error) {
+      console.error('Error saving event:', error);
+      alert('Une erreur est survenue lors de l\'enregistrement de l\'événement');
+    }
+  };
+
+  // Handle form cancel
+  const handleFormCancel = () => {
+    setShowEventForm(false);
+    
+    // Refresh the calendar to ensure it's up to date
+    if (refreshCalendarRef.current) {
+      refreshCalendarRef.current();
+    }
+  };
+
+  return (
+    <main className="min-h-screen p-4 md:p-8">
+      <h1 className="text-3xl font-bold mb-6">Gestion des Ateliers EPN</h1>
+      
+      <div className="bg-white p-4 rounded shadow">
+        <CalendarWrapper
+          onEventClick={handleEventClick}
+          onDateSelect={handleDateSelect}
+          onRefresh={(refreshFn) => {
+            refreshCalendarRef.current = refreshFn;
+          }}
+        />
+      </div>
+      
+      {/* Event Form Modal */}
+      <Modal
+        isOpen={showEventForm}
+        onClose={() => {
+          setShowEventForm(false);
+          setEditMode(false);
+          setEventFormOpen(false);
+          
+          // Refresh the calendar when the modal is closed
+          if (refreshCalendarRef.current) {
+            refreshCalendarRef.current();
+          }
+        }}
+        title={isEditing ? 'Modifier l\'événement' : 'Nouvel événement'}
+        size="lg"
+      >
+        <EventForm
+          initialData={eventFormData}
+          onSubmit={handleFormSubmit}
+          onCancel={handleFormCancel}
+        />
+      </Modal>
+
+      {/* Event Details Modal */}
+      <Modal
+        isOpen={showEventDetails}
+        onClose={() => {
+          setShowEventDetails(false);
+          setSelectedEventId(null);
+          
+          // Refresh the calendar when the modal is closed
+          if (refreshCalendarRef.current) {
+            refreshCalendarRef.current();
+          }
+        }}
+        title="Détails de l'événement"
+        size="md"
+      >
+        {selectedEventId && (
+          <EventDetails
+            eventId={selectedEventId}
+            refreshCalendarRef={refreshCalendarRef}
+            onClose={() => {
+              setShowEventDetails(false);
+              setSelectedEventId(null);
+              // Refresh the calendar after closing details
+              if (refreshCalendarRef.current) {
+                refreshCalendarRef.current();
+              }
+            }}
           />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+        )}
+      </Modal>
+    </main>
   );
 }

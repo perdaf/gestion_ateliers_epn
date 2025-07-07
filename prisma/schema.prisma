@@ -1,0 +1,119 @@
+// /prisma/schema.prisma (Version MVP+)
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
+enum RoleAgent {
+  PORTEUR_PROJET
+  ANIMATEUR
+  ADMIN
+}
+
+enum FrequenceRecurrence {
+  QUOTIDIENNE
+  HEBDOMADAIRE
+  MENSUELLE
+}
+
+enum StatutEvenement {
+  BROUILLON
+  CONFIRME
+  ANNULE
+}
+
+model Agent {
+  id               String            @id @default(cuid())
+  nom              String
+  prenom           String
+  email            String            @unique
+  role             RoleAgent
+  couleur          String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  
+  evenementsPortes Evenement[]       @relation("PorteurProjetEvenements")
+  evenementsAnimes EvenementAnimateur[]
+  reglesPortees    RegleRecurrence[] @relation("PorteurProjetRegles")
+  reglesAnimes     RegleAnimateur[]
+  @@map("agents")
+}
+
+model Atelier {
+  id               String            @id @default(cuid())
+  titre            String
+  duree_minutes    Int               @default(60)
+  couleur          String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  
+  evenements       Evenement[]
+  reglesRecurrence RegleRecurrence[]
+  @@map("ateliers")
+}
+
+// Pivot pour les animateurs d'événements uniques
+model EvenementAnimateur {
+  id          String    @id @default(cuid())
+  evenementId String
+  agentId     String
+  evenement   Evenement @relation(fields: [evenementId], references: [id], onDelete: Cascade)
+  agent       Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  @@unique([evenementId, agentId])
+  @@map("evenement_animateurs")
+}
+
+// Pivot pour les animateurs de règles de récurrence
+model RegleAnimateur {
+  id      String          @id @default(cuid())
+  regleId String
+  agentId String
+  regle   RegleRecurrence @relation(fields: [regleId], references: [id], onDelete: Cascade)
+  agent   Agent           @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  @@unique([regleId, agentId])
+  @@map("regle_animateurs")
+}
+
+// Règle de récurrence : Stocke le "modèle" de l'événement récurrent
+model RegleRecurrence {
+  id              String              @id @default(cuid())
+  titre           String
+  description     String?
+  heure_debut     String              // "HH:mm"
+  heure_fin       String              // "HH:mm"
+  frequence       FrequenceRecurrence
+  jours_semaine   String              // Stored as comma-separated values: "0,1,2,3,4,5,6"
+  nth_of_month    Int?                // Pour "le Nième jour de la semaine du mois" (1=premier, 2=deuxième, etc., -1=dernier)
+  date_debut_serie DateTime
+  date_fin_serie  DateTime
+  
+  atelierId       String
+  porteurProjetId String
+  atelier         Atelier             @relation(fields: [atelierId], references: [id])
+  porteurProjet   Agent               @relation("PorteurProjetRegles", fields: [porteurProjetId], references: [id])
+  animateurs      RegleAnimateur[]
+  
+  @@map("regles_recurrence")
+}
+
+// Événement unique (ou une exception à une règle dans le futur)
+model Evenement {
+  id              String           @id @default(cuid())
+  titre           String
+  date_debut      DateTime
+  date_fin        DateTime
+  statut          StatutEvenement  @default(CONFIRME)
+  
+  atelierId       String
+  porteurProjetId String
+  atelier         Atelier          @relation(fields: [atelierId], references: [id])
+  porteurProjet   Agent            @relation("PorteurProjetEvenements", fields: [porteurProjetId], references: [id])
+  animateurs      EvenementAnimateur[]
+  
+  @@map("evenements")
+}
