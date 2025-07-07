@@ -10,6 +10,7 @@ import multiMonthPlugin from '@fullcalendar/multimonth';
 import { EventClickArg, DateSelectArg, EventInput } from '@fullcalendar/core';
 import { fr } from 'date-fns/locale';
 import { format } from 'date-fns';
+import { ExportOptionsModal, ExportOptions } from './export-options-modal';
 
 interface CalendarWrapperProps {
   onEventClick?: (event: EventClickArg) => void;
@@ -28,6 +29,7 @@ export const CalendarWrapper: React.FC<CalendarWrapperProps> = ({
   const [currentView, setCurrentView] = useState<string>('timeGridWeek');
   const [currentQuarter, setCurrentQuarter] = useState<number | null>(null);
   const calendarRef = useRef<FullCalendar>(null);
+  const [showExportModal, setShowExportModal] = useState(false);
 
   // Fetch events from the API
   const fetchEvents = async (start: Date, end: Date) => {
@@ -177,13 +179,33 @@ export const CalendarWrapper: React.FC<CalendarWrapperProps> = ({
     }
   };
 
-  // Export calendar to PDF
-  const exportToPDF = async () => {
+  // Show export options modal
+  const exportToPDF = () => {
+    setShowExportModal(true);
+  };
+
+  // Handle export with selected options
+  const handleExportWithOptions = async (options: ExportOptions) => {
     if (!calendarRef.current) return;
 
-    const calendarApi = calendarRef.current.getApi();
-    const start = calendarApi.view.activeStart;
-    const end = calendarApi.view.activeEnd;
+    let start: Date;
+    let end: Date;
+
+    if (options.type === 'quarter') {
+      // Calculate start and end dates for the selected quarter
+      const quarterStartMonth = (options.quarter! - 1) * 3; // 0, 3, 6, or 9
+      start = new Date(options.year!, quarterStartMonth, 1);
+      
+      // End date is the last day of the last month in the quarter
+      const endMonth = quarterStartMonth + 3;
+      end = new Date(options.year!, endMonth, 0);
+      // Set time to end of day
+      end.setHours(23, 59, 59, 999);
+    } else {
+      // Use custom date range
+      start = options.startDate!;
+      end = options.endDate!;
+    }
 
     try {
       const response = await fetch(
@@ -200,7 +222,16 @@ export const CalendarWrapper: React.FC<CalendarWrapperProps> = ({
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `planning-${start.toISOString().split('T')[0]}-to-${end.toISOString().split('T')[0]}.pdf`;
+        
+        // Format filename based on export type
+        let filename;
+        if (options.type === 'quarter') {
+          filename = `planning-T${options.quarter}-${options.year}.pdf`;
+        } else {
+          filename = `planning-${format(start, 'yyyy-MM-dd')}-to-${format(end, 'yyyy-MM-dd')}.pdf`;
+        }
+        
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
@@ -490,6 +521,16 @@ export const CalendarWrapper: React.FC<CalendarWrapperProps> = ({
           height="auto"
         />
       </div>
+      
+      {/* Export Options Modal */}
+      <ExportOptionsModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        onExport={handleExportWithOptions}
+        currentDate={currentDate}
+        currentView={currentView}
+        currentQuarter={currentQuarter}
+      />
     </div>
   );
 };

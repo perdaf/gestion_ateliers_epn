@@ -5,6 +5,7 @@ import { parseJoursSemaine } from '@/lib/validations';
 import { FrequenceRecurrence } from '@prisma/client';
 import { renderToStream } from '@react-pdf/renderer';
 import { CalendarPDF } from '@/components/pdf/calendar-pdf';
+import React from 'react';
 
 // Map our enum to RRule frequency constants
 const frequenceToRRuleFreq: Record<FrequenceRecurrence, Frequency> = {
@@ -112,20 +113,38 @@ export async function GET(request: NextRequest) {
     const allEvents = [...evenementsUniques, ...evenementsRecurrents];
 
     if (format === 'pdf') {
-      // For PDF, we'll need to implement the PDF generation component first
-      // For now, return a simple text response
-      return new Response('PDF export not implemented yet', {
-        headers: { 'Content-Type': 'text/plain' },
-      });
-      
-      // Note: The proper implementation would be something like:
-      // const pdfStream = await renderToStream(CalendarPDF({ evenements: allEvents, startDate: start, endDate: end }));
-      // return new Response(pdfStream, {
-      //   headers: { 
-      //     'Content-Type': 'application/pdf',
-      //     'Content-Disposition': `attachment; filename="planning-${start.toISOString().split('T')[0]}-to-${end.toISOString().split('T')[0]}.pdf"`
-      //   },
-      // });
+      try {
+        // Sort events by date for better organization in the PDF
+        const sortedEvents = allEvents.sort((a, b) =>
+          new Date(a.date_debut).getTime() - new Date(b.date_debut).getTime()
+        );
+        
+        // Generate the PDF using the CalendarPDF component
+        // Generate the PDF using the CalendarPDF component with React.createElement
+        const pdfStream = await renderToStream(
+          React.createElement(CalendarPDF, {
+            evenements: sortedEvents,
+            startDate: start,
+            endDate: end
+          })
+        );
+        
+        // Format the filename based on the date range
+        const startFormatted = start.toISOString().split('T')[0];
+        const endFormatted = end.toISOString().split('T')[0];
+        const filename = `planning-${startFormatted}-to-${endFormatted}.pdf`;
+        
+        // Return the PDF stream directly
+        return new Response(pdfStream as unknown as ReadableStream<Uint8Array>, {
+          headers: {
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename="${filename}"`
+          },
+        });
+      } catch (error) {
+        console.error('Error generating PDF:', error);
+        return new Response('Erreur lors de la génération du PDF', { status: 500 });
+      }
     }
 
     if (format === 'ics') {
