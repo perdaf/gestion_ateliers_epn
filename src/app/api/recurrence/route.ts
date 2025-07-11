@@ -83,29 +83,54 @@ export async function POST(request: NextRequest) {
         throw error;
       }
       
+      // Determine which ateliers to use
+      let atelierIds: string[] = [];
+      if (validatedData.atelierIds && validatedData.atelierIds.length > 0) {
+        atelierIds = validatedData.atelierIds;
+      } else if (validatedData.atelierId) {
+        atelierIds = [validatedData.atelierId];
+      }
+      
+      if (atelierIds.length === 0) {
+        throw new Error('Au moins un atelier doit être sélectionné');
+      }
+
       // Create the recurrence rule
+      const createData: any = {
+        titre: validatedData.titre,
+        heure_debut: validatedData.heure_debut,
+        heure_fin: validatedData.heure_fin,
+        frequence: validatedData.frequence,
+        jours_semaine: stringifyJoursSemaine(validatedData.jours_semaine),
+        date_debut_serie: validatedData.date_debut_serie,
+        date_fin_serie: validatedData.date_fin_serie,
+        porteurProjet: { connect: { id: porteurProjetId } },
+      };
+
+      // Only include nth_of_month if frequency is MENSUELLE
+      if (validatedData.frequence === 'MENSUELLE') {
+        createData.nth_of_month = validatedData.nth_of_month !== undefined && validatedData.nth_of_month !== null
+          ? Number(validatedData.nth_of_month)
+          : 1;
+      }
+
+      // Keep backward compatibility - always connect to first atelier
+      // This is required because the old schema still has a non-null atelierId field
+      createData.atelier = { connect: { id: atelierIds[0] } };
+
       const newRegle = await tx.regleRecurrence.create({
-        data: {
-          titre: validatedData.titre,
-          heure_debut: validatedData.heure_debut,
-          heure_fin: validatedData.heure_fin,
-          frequence: validatedData.frequence,
-          jours_semaine: stringifyJoursSemaine(validatedData.jours_semaine),
-          // Only include nth_of_month if frequency is MENSUELLE
-          ...(validatedData.frequence === 'MENSUELLE'
-              ? {
-                  // Use the provided value or default to 1 if truly missing
-                  nth_of_month: validatedData.nth_of_month !== undefined && validatedData.nth_of_month !== null
-                    ? Number(validatedData.nth_of_month)
-                    : 1
-                }
-              : {}),
-          date_debut_serie: validatedData.date_debut_serie,
-          date_fin_serie: validatedData.date_fin_serie,
-          atelier: { connect: { id: validatedData.atelierId } },
-          porteurProjet: { connect: { id: porteurProjetId } },
-        },
+        data: createData,
       });
+      
+      // Create atelier relationships for multiple ateliers
+      for (const atelierId of atelierIds) {
+        await tx.regleAtelier.create({
+          data: {
+            regleId: newRegle.id,
+            atelierId: atelierId,
+          },
+        });
+      }
       
       // Create the animateur relationships
       for (const animateurId of validatedData.animateursIds) {
@@ -124,6 +149,7 @@ export async function POST(request: NextRequest) {
           atelier: true,
           porteurProjet: true,
           animateurs: { include: { agent: true } },
+          ateliers: { include: { atelier: true } },
         },
       });
     });
@@ -276,6 +302,18 @@ export async function PUT(request: NextRequest) {
         throw error;
       }
       
+      // Determine which ateliers to use
+      let atelierIds: string[] = [];
+      if (validatedData.atelierIds && validatedData.atelierIds.length > 0) {
+        atelierIds = validatedData.atelierIds;
+      } else if (validatedData.atelierId) {
+        atelierIds = [validatedData.atelierId];
+      }
+      
+      if (atelierIds.length === 0) {
+        throw new Error('Au moins un atelier doit être sélectionné');
+      }
+
       // Update the recurrence rule
       const updatedRegle = await tx.regleRecurrence.update({
         where: { id },
@@ -296,10 +334,25 @@ export async function PUT(request: NextRequest) {
               : {}),
           date_debut_serie: validatedData.date_debut_serie,
           date_fin_serie: validatedData.date_fin_serie,
-          atelier: { connect: { id: validatedData.atelierId } },
+          atelier: { connect: { id: atelierIds[0] } }, // Keep backward compatibility
           porteurProjet: { connect: { id: porteurProjetId } },
         },
       });
+      
+      // Delete existing atelier relationships
+      await tx.regleAtelier.deleteMany({
+        where: { regleId: id },
+      });
+      
+      // Create new atelier relationships
+      for (const atelierId of atelierIds) {
+        await tx.regleAtelier.create({
+          data: {
+            regleId: updatedRegle.id,
+            atelierId: atelierId,
+          },
+        });
+      }
       
       // Delete existing animateur relationships
       await tx.regleAnimateur.deleteMany({
@@ -323,6 +376,7 @@ export async function PUT(request: NextRequest) {
           atelier: true,
           porteurProjet: true,
           animateurs: { include: { agent: true } },
+          ateliers: { include: { atelier: true } },
         },
       });
     });
@@ -378,6 +432,7 @@ export async function GET(request: NextRequest) {
         atelier: true,
         porteurProjet: true,
         animateurs: { include: { agent: true } },
+        ateliers: { include: { atelier: true } },
       },
     });
     

@@ -31,7 +31,12 @@ export async function GET(request: NextRequest) {
       // Fetch the recurrence rule
       const regle = await prisma.regleRecurrence.findUnique({
         where: { id: regleId },
-        include: { atelier: true, porteurProjet: true, animateurs: { include: { agent: true } } },
+        include: {
+          atelier: true,
+          porteurProjet: true,
+          animateurs: { include: { agent: true } },
+          ateliers: { include: { atelier: true } }
+        },
       });
       
       if (!regle) {
@@ -125,6 +130,7 @@ export async function GET(request: NextRequest) {
           date_debut,
           date_fin,
           atelier: regle.atelier,
+          ateliers: regle.ateliers || [],
           porteurProjet: regle.porteurProjet,
           animateurs: regle.animateurs,
           isRecurrent: true,
@@ -156,7 +162,12 @@ export async function GET(request: NextRequest) {
           { date_fin: { gte: start } },   // Finit après le début de la période
         ],
       },
-      include: { atelier: true, porteurProjet: true, animateurs: { include: { agent: true } } },
+      include: {
+        atelier: true,
+        porteurProjet: true,
+        animateurs: { include: { agent: true } },
+        ateliers: { include: { atelier: true } }
+      },
     });
 
     // 2. Récupérer les règles de récurrence
@@ -165,13 +176,24 @@ export async function GET(request: NextRequest) {
         date_debut_serie: { lte: end },
         date_fin_serie: { gte: start },
       },
-      include: { atelier: true, porteurProjet: true, animateurs: { include: { agent: true } } },
+      include: {
+        atelier: true,
+        porteurProjet: true,
+        animateurs: { include: { agent: true } },
+        ateliers: { include: { atelier: true } }
+      },
     });
     
     
     // 3. "Expanser" les règles en événements virtuels pour le calendrier
     const evenementsRecurrents = regles.flatMap(regle => {
       const joursSemaineNums = parseJoursSemaine(regle.jours_semaine);
+      
+      // Skip rules with no valid days
+      if (joursSemaineNums.length === 0) {
+        console.warn(`Skipping rule ${regle.id}: no valid days found`);
+        return [];
+      }
       
       // Convertir les numéros de jours (0-6) en constantes RRule.Weekday
       // 0 = dimanche, 1 = lundi, etc.
@@ -266,6 +288,7 @@ export async function GET(request: NextRequest) {
           date_debut,
           date_fin,
           atelier: regle.atelier,
+          ateliers: regle.ateliers || [],
           porteurProjet: regle.porteurProjet,
           animateurs: regle.animateurs,
           isRecurrent: true,

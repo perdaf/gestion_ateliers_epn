@@ -57,6 +57,7 @@ export const EventForm: React.FC<EventFormProps> = ({
       date_debut: new Date(),
       date_fin: new Date(new Date().getTime() + 60 * 60 * 1000), // 1 hour later
       atelierId: '',
+      atelierIds: [],
       porteurProjetIds: [],
       animateursIds: [],
     },
@@ -84,6 +85,7 @@ export const EventForm: React.FC<EventFormProps> = ({
       date_debut_serie: new Date(),
       date_fin_serie: new Date(new Date().setMonth(new Date().getMonth() + 1)), // 1 month later
       atelierId: '',
+      atelierIds: [],
       porteurProjetIds: [],
       animateursIds: [],
     },
@@ -228,6 +230,24 @@ export const EventForm: React.FC<EventFormProps> = ({
                     nthOfMonth = 1;
                   }
                   
+                  // Extract atelierIds from the recurrence rule data
+                  let atelierIds: string[] = [];
+                  
+                  // Check if we have the new many-to-many relation
+                  if (regle.ateliers && Array.isArray(regle.ateliers)) {
+                    atelierIds = regle.ateliers.map((a: any) => {
+                      if (a.atelierId) return a.atelierId;
+                      if (a.atelier?.id) return a.atelier.id;
+                      return null;
+                    }).filter(Boolean);
+                  }
+                  // Fallback to old single atelier relation
+                  else if (regle.atelierId) {
+                    atelierIds = [regle.atelierId];
+                  }
+                  
+                  console.log('Extracted atelierIds from recurrence rule:', atelierIds);
+                  
                   resetRecurrent({
                     titre: regle.titre,
                     heure_debut: regle.heure_debut,
@@ -237,7 +257,8 @@ export const EventForm: React.FC<EventFormProps> = ({
                     nth_of_month: nthOfMonth,
                     date_debut_serie: new Date(regle.date_debut_serie),
                     date_fin_serie: new Date(regle.date_fin_serie),
-                    atelierId: regle.atelierId,
+                    atelierId: regle.atelierId || '', // Keep for backward compatibility
+                    atelierIds: atelierIds,
                     porteurProjetIds: regle.porteurProjetId ? [regle.porteurProjetId] : [],
                     animateursIds: animateursIds,
                   });
@@ -412,11 +433,34 @@ export const EventForm: React.FC<EventFormProps> = ({
         
         console.log('Pre-filling unique event form with animateursIds:', animateursIds);
         
+        // Extract atelierIds from the initial data
+        let atelierIds: string[] = [];
+        
+        // Check if we have the new many-to-many relation
+        if (initialData.ateliers && Array.isArray(initialData.ateliers)) {
+          atelierIds = initialData.ateliers.map((a: any) => {
+            if (a.atelierId) return a.atelierId;
+            if (a.atelier?.id) return a.atelier.id;
+            return null;
+          }).filter(Boolean);
+        }
+        // Check if we have atelierIds directly
+        else if (initialData.atelierIds && Array.isArray(initialData.atelierIds)) {
+          atelierIds = initialData.atelierIds;
+        }
+        // Fallback to old single atelier relation
+        else if (initialData.atelierId) {
+          atelierIds = [initialData.atelierId];
+        }
+        
+        console.log('Pre-filling unique event form with atelierIds:', atelierIds);
+        
         resetUnique({
           titre: initialData.titre,
           date_debut: initialData.date_debut,
           date_fin: initialData.date_fin,
-          atelierId: initialData.atelierId,
+          atelierId: initialData.atelierId || '', // Keep for backward compatibility
+          atelierIds: atelierIds,
           porteurProjetIds: initialData.porteurProjetId ? [initialData.porteurProjetId] : [],
           animateursIds: animateursIds,
         });
@@ -555,7 +599,7 @@ export const EventForm: React.FC<EventFormProps> = ({
               name="frequence"
               render={({ field }) => (
                 <select
-                  value={field.value}
+                  value={Array.isArray(field.value) ? field.value[0] || 'HEBDOMADAIRE' : field.value || 'HEBDOMADAIRE'}
                   onChange={(e) => {
                     field.onChange(e.target.value);
                     setCurrentFrequence(e.target.value as 'QUOTIDIENNE' | 'HEBDOMADAIRE' | 'MENSUELLE');
@@ -748,24 +792,43 @@ export const EventForm: React.FC<EventFormProps> = ({
           </div>
 
           <div className="mb-4">
-            <label className="form-label">Atelier</label>
+            <label className="form-label">Ateliers</label>
             <Controller
               control={controlRecurrent}
-              name="atelierId"
+              name="atelierIds"
               render={({ field }) => (
-                <CustomSelect
-                  options={ateliers.map(atelier => ({
-                    value: atelier.id,
-                    label: atelier.titre
-                  }))}
-                  value={field.value}
-                  onChange={field.onChange}
-                  placeholder="Sélectionner un atelier"
-                />
+                <div className="max-h-40 overflow-y-auto border rounded p-2">
+                  {ateliers.map((atelier) => (
+                    <label key={atelier.id} className="flex items-center mb-1">
+                      <input
+                        type="checkbox"
+                        value={atelier.id}
+                        checked={Array.isArray(field.value) && field.value.includes(atelier.id)}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          const newValue = e.target.checked
+                            ? [...(Array.isArray(field.value) ? field.value : []), value]
+                            : Array.isArray(field.value) ? field.value.filter((v: string) => v !== value) : [];
+                          field.onChange(newValue);
+                        }}
+                        className="form-checkbox mr-2"
+                      />
+                      <span className="flex items-center">
+                        {atelier.couleur && (
+                          <div
+                            className="w-3 h-3 rounded-full mr-2"
+                            style={{ backgroundColor: atelier.couleur }}
+                          ></div>
+                        )}
+                        {atelier.titre}
+                      </span>
+                    </label>
+                  ))}
+                </div>
               )}
             />
-            {errorsRecurrent.atelierId && (
-              <p className="text-red-500 text-sm">{String(errorsRecurrent.atelierId.message)}</p>
+            {errorsRecurrent.atelierIds && (
+              <p className="text-red-500 text-sm">{String(errorsRecurrent.atelierIds.message)}</p>
             )}
           </div>
 
@@ -911,24 +974,43 @@ export const EventForm: React.FC<EventFormProps> = ({
           </div>
 
           <div className="mb-4">
-            <label className="form-label">Atelier</label>
+            <label className="form-label">Ateliers</label>
             <Controller
               control={controlUnique}
-              name="atelierId"
+              name="atelierIds"
               render={({ field }) => (
-                <CustomSelect
-                  options={ateliers.map(atelier => ({
-                    value: atelier.id,
-                    label: atelier.titre
-                  }))}
-                  value={field.value}
-                  onChange={field.onChange}
-                  placeholder="Sélectionner un atelier"
-                />
+                <div className="max-h-40 overflow-y-auto border rounded p-2">
+                  {ateliers.map((atelier) => (
+                    <label key={atelier.id} className="flex items-center mb-1">
+                      <input
+                        type="checkbox"
+                        value={atelier.id}
+                        checked={Array.isArray(field.value) && field.value.includes(atelier.id)}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          const newValue = e.target.checked
+                            ? [...(Array.isArray(field.value) ? field.value : []), value]
+                            : Array.isArray(field.value) ? field.value.filter((v: string) => v !== value) : [];
+                          field.onChange(newValue);
+                        }}
+                        className="form-checkbox mr-2"
+                      />
+                      <span className="flex items-center">
+                        {atelier.couleur && (
+                          <div
+                            className="w-3 h-3 rounded-full mr-2"
+                            style={{ backgroundColor: atelier.couleur }}
+                          ></div>
+                        )}
+                        {atelier.titre}
+                      </span>
+                    </label>
+                  ))}
+                </div>
               )}
             />
-            {errorsUnique.atelierId && (
-              <p className="text-red-500 text-sm">{String(errorsUnique.atelierId.message)}</p>
+            {errorsUnique.atelierIds && (
+              <p className="text-red-500 text-sm">{String(errorsUnique.atelierIds.message)}</p>
             )}
           </div>
 

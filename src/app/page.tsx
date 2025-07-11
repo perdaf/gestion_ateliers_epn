@@ -81,6 +81,7 @@ export default function Home() {
       date_debut: event.start,
       date_fin: event.end,
       atelierId: event.extendedProps.atelierId,
+      atelierIds: event.extendedProps.atelierId ? [event.extendedProps.atelierId] : [],
       porteurProjetId: event.extendedProps.porteurProjetId,
       // Add porteurProjetIds array for validation
       porteurProjetIds: event.extendedProps.porteurProjetId ? [event.extendedProps.porteurProjetId] : [],
@@ -106,6 +107,7 @@ export default function Home() {
       date_debut: selectInfo.start,
       date_fin: selectInfo.end,
       atelierId: '',
+      atelierIds: [],
       porteurProjetId: '',
       porteurProjetIds: [], // Add empty porteurProjetIds array for validation
       animateursIds: [],
@@ -131,6 +133,7 @@ export default function Home() {
           date_debut_serie: data.date_debut_serie,
           date_fin_serie: data.date_fin_serie,
           atelierId: data.atelierId,
+          atelierIds: data.atelierIds || (data.atelierId ? [data.atelierId] : []),
           porteurProjetId: data.porteurProjetId,
           porteurProjetIds: data.porteurProjetIds || (data.porteurProjetId ? [data.porteurProjetId] : []),
           animateursIds: data.animateursIds,
@@ -163,6 +166,7 @@ export default function Home() {
           date_debut: data.date_debut,
           date_fin: data.date_fin,
           atelierId: data.atelierId,
+          atelierIds: data.atelierIds || (data.atelierId ? [data.atelierId] : []),
           porteurProjetId: data.porteurProjetId,
           porteurProjetIds: data.porteurProjetIds || (data.porteurProjetId ? [data.porteurProjetId] : []),
           animateursIds: data.animateursIds,

@@ -454,7 +454,31 @@ export const CalendarWrapper: React.FC<CalendarWrapperProps> = ({
             Trimestre
           </button>
           <button
-            onClick={() => handleViewChange('multiMonthYear')}
+            onClick={() => {
+              // When clicking on year view, ensure we're showing the full year starting from January
+              if (calendarRef.current) {
+                console.log('Année button clicked');
+                debugCalendarState('BEFORE ANNÉE');
+                
+                const calendarApi = calendarRef.current.getApi();
+                const currentDate = calendarApi.getDate();
+                
+                console.log('Current date before setting year:', currentDate);
+                
+                // Create a new date at January 1st of the current year
+                const yearStart = new Date(currentDate.getFullYear(), 0, 1); // Month 0 = January
+                console.log('Year start date:', yearStart);
+                
+                calendarApi.gotoDate(yearStart);
+                setCurrentDate(yearStart);
+                
+                console.log('Current date after setting year:', yearStart);
+                
+                handleViewChange('multiMonthYear');
+                
+                debugCalendarState('AFTER ANNÉE');
+              }
+            }}
             className={`btn-secondary ${
               currentView === 'multiMonthYear'
                 ? 'border-2 border-blue-600 font-bold text-blue-600'

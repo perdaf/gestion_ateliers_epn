@@ -42,7 +42,7 @@ function generateICSContent(evenements: any[]): string {
       `SUMMARY:${evt.titre}`,
       `DTSTART:${startStr}`,
       `DTEND:${endStr}`,
-      `DESCRIPTION:Atelier: ${evt.atelier.titre}\\nPorteur de projet: ${evt.porteurProjet.prenom} ${evt.porteurProjet.nom}`,
+      `DESCRIPTION:Ateliers: ${evt.ateliers.map((a: any) => a.atelier.titre).join(', ')}\\nPorteur de projet: ${evt.porteurProjet.prenom} ${evt.porteurProjet.nom}`,
       'END:VEVENT'
     );
   });
@@ -64,7 +64,11 @@ export async function GET(request: NextRequest) {
         date_debut: { gte: start },
         date_fin: { lte: end },
       },
-      include: { atelier: true, porteurProjet: true, animateurs: { include: { agent: true } } },
+      include: {
+        ateliers: { include: { atelier: true } },
+        porteurProjet: true,
+        animateurs: { include: { agent: true } }
+      },
     });
 
     // 2. Récupérer les règles de récurrence
@@ -73,7 +77,11 @@ export async function GET(request: NextRequest) {
         date_debut_serie: { lte: end },
         date_fin_serie: { gte: start },
       },
-      include: { atelier: true, porteurProjet: true, animateurs: { include: { agent: true } } },
+      include: {
+        ateliers: { include: { atelier: true } },
+        porteurProjet: true,
+        animateurs: { include: { agent: true } }
+      },
     });
     
     // 3. "Expanser" les règles en événements virtuels pour le calendrier
@@ -102,7 +110,7 @@ export async function GET(request: NextRequest) {
           titre: regle.titre,
           date_debut,
           date_fin,
-          atelier: regle.atelier,
+          ateliers: regle.ateliers,
           porteurProjet: regle.porteurProjet,
           animateurs: regle.animateurs,
           isRecurrent: true,

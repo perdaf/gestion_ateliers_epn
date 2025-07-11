@@ -4,12 +4,13 @@ import { prisma } from '@/lib/prisma';
 // GET /api/ateliers/[id] - Get a specific atelier
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const atelier = await prisma.atelier.findUnique({
       where: {
-        id: params.id,
+        id,
       },
     });
 
@@ -33,14 +34,15 @@ export async function GET(
 // PUT /api/ateliers/[id] - Update a specific atelier
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const body = await request.json();
+    const { id } = await params;
 
     const atelier = await prisma.atelier.update({
       where: {
-        id: params.id,
+        id,
       },
       data: body,
     });
@@ -58,12 +60,13 @@ export async function PUT(
 // DELETE /api/ateliers/[id] - Delete a specific atelier
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     await prisma.atelier.delete({
       where: {
-        id: params.id,
+        id,
       },
     });
 

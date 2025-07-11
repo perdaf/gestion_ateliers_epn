@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
             agent: true
           }
         },
+        ateliers: { include: { atelier: true } }
       },
     });
     
@@ -131,17 +132,40 @@ export async function POST(request: NextRequest) {
             porteurProjetId: porteurProjetId,
           });
           
+          // Handle multiple ateliers or single atelier for backward compatibility
+          let atelierIds: string[] = [];
+          if (validatedData.atelierIds && validatedData.atelierIds.length > 0) {
+            atelierIds = validatedData.atelierIds;
+          } else if (validatedData.atelierId) {
+            atelierIds = [validatedData.atelierId];
+          }
+          
+          if (atelierIds.length === 0) {
+            throw new Error('Au moins un atelier doit être sélectionné');
+          }
+          
+          // Create event with first atelier for backward compatibility
           const newEvenement = await tx.evenement.create({
             data: {
               titre: validatedData.titre,
               date_debut: validatedData.date_debut,
               date_fin: validatedData.date_fin,
-              atelier: { connect: { id: validatedData.atelierId } },
+              atelier: { connect: { id: atelierIds[0] } },
               porteurProjet: { connect: { id: porteurProjetId } },
             },
           });
           
           console.log('Event created successfully with ID:', newEvenement.id);
+          
+          // Create atelier relationships for multiple ateliers
+          for (const atelierId of atelierIds) {
+            await tx.evenementAtelier.create({
+              data: {
+                evenementId: newEvenement.id,
+                atelierId: atelierId,
+              },
+            });
+          }
           
           // Create the animateur relationships
           console.log('Creating animateur relationships for animateurs:', validatedData.animateursIds);
@@ -165,6 +189,7 @@ export async function POST(request: NextRequest) {
               atelier: true,
               porteurProjet: true,
               animateurs: { include: { agent: true } },
+              ateliers: { include: { atelier: true } }
             },
           });
         } catch (txError) {
@@ -283,19 +308,47 @@ export async function PUT(request: NextRequest) {
             porteurProjetId: porteurProjetId,
           });
           
-          // Update the event
+          // Handle multiple ateliers or single atelier for backward compatibility
+          let atelierIds: string[] = [];
+          if (validatedData.atelierIds && validatedData.atelierIds.length > 0) {
+            atelierIds = validatedData.atelierIds;
+          } else if (validatedData.atelierId) {
+            atelierIds = [validatedData.atelierId];
+          }
+          
+          if (atelierIds.length === 0) {
+            throw new Error('Au moins un atelier doit être sélectionné');
+          }
+          
+          // Update the event with first atelier for backward compatibility
           const updatedEvenement = await tx.evenement.update({
             where: { id },
             data: {
               titre: validatedData.titre,
               date_debut: validatedData.date_debut,
               date_fin: validatedData.date_fin,
-              atelier: { connect: { id: validatedData.atelierId } },
+              atelier: { connect: { id: atelierIds[0] } },
               porteurProjet: { connect: { id: porteurProjetId } },
             },
           });
           
           console.log('Event updated successfully with ID:', updatedEvenement.id);
+          
+          // Delete existing atelier relationships
+          console.log('Deleting existing atelier relationships for event:', id);
+          await tx.evenementAtelier.deleteMany({
+            where: { evenementId: id },
+          });
+          
+          // Create new atelier relationships for multiple ateliers
+          for (const atelierId of atelierIds) {
+            await tx.evenementAtelier.create({
+              data: {
+                evenementId: updatedEvenement.id,
+                atelierId: atelierId,
+              },
+            });
+          }
           
           // Delete existing animateur relationships
           console.log('Deleting existing animateur relationships for event:', id);
@@ -325,6 +378,7 @@ export async function PUT(request: NextRequest) {
               atelier: true,
               porteurProjet: true,
               animateurs: { include: { agent: true } },
+              ateliers: { include: { atelier: true } }
             },
           });
         } catch (txError) {

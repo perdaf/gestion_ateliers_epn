@@ -47,13 +47,19 @@ model Agent {
 model Atelier {
   id               String            @id @default(cuid())
   titre            String
+  description      String?
   duree_minutes    Int               @default(60)
   couleur          String?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   
+  // Keep old relations for backward compatibility during migration
   evenements       Evenement[]
   reglesRecurrence RegleRecurrence[]
+  
+  // New many-to-many relations
+  evenementAteliers EvenementAtelier[]
+  regleAteliers    RegleAtelier[]
   @@map("ateliers")
 }
 
@@ -79,6 +85,28 @@ model RegleAnimateur {
   @@map("regle_animateurs")
 }
 
+// Pivot pour les ateliers d'événements uniques
+model EvenementAtelier {
+  id          String    @id @default(cuid())
+  evenementId String
+  atelierId   String
+  evenement   Evenement @relation(fields: [evenementId], references: [id], onDelete: Cascade)
+  atelier     Atelier   @relation(fields: [atelierId], references: [id], onDelete: Cascade)
+  @@unique([evenementId, atelierId])
+  @@map("evenement_ateliers")
+}
+
+// Pivot pour les ateliers de règles de récurrence
+model RegleAtelier {
+  id        String          @id @default(cuid())
+  regleId   String
+  atelierId String
+  regle     RegleRecurrence @relation(fields: [regleId], references: [id], onDelete: Cascade)
+  atelier   Atelier         @relation(fields: [atelierId], references: [id], onDelete: Cascade)
+  @@unique([regleId, atelierId])
+  @@map("regle_ateliers")
+}
+
 // Règle de récurrence : Stocke le "modèle" de l'événement récurrent
 model RegleRecurrence {
   id              String              @id @default(cuid())
@@ -92,11 +120,15 @@ model RegleRecurrence {
   date_debut_serie DateTime
   date_fin_serie  DateTime
   
-  atelierId       String
+  // Keep old relation for backward compatibility during migration
+  atelierId       String?
   porteurProjetId String
-  atelier         Atelier             @relation(fields: [atelierId], references: [id])
+  atelier         Atelier?            @relation(fields: [atelierId], references: [id])
   porteurProjet   Agent               @relation("PorteurProjetRegles", fields: [porteurProjetId], references: [id])
   animateurs      RegleAnimateur[]
+  
+  // New many-to-many relation for ateliers
+  ateliers        RegleAtelier[]
   
   @@map("regles_recurrence")
 }
@@ -109,11 +141,15 @@ model Evenement {
   date_fin        DateTime
   statut          StatutEvenement  @default(CONFIRME)
   
-  atelierId       String
+  // Keep old relation for backward compatibility during migration
+  atelierId       String?
   porteurProjetId String
-  atelier         Atelier          @relation(fields: [atelierId], references: [id])
+  atelier         Atelier?         @relation(fields: [atelierId], references: [id])
   porteurProjet   Agent            @relation("PorteurProjetEvenements", fields: [porteurProjetId], references: [id])
   animateurs      EvenementAnimateur[]
+  
+  // New many-to-many relation for ateliers
+  ateliers        EvenementAtelier[]
   
   @@map("evenements")
 }

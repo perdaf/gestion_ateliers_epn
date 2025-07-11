@@ -62,19 +62,42 @@ const styles = StyleSheet.create({
     fontSize: 10,
   },
   titleCell: {
-    width: '30%',
+    width: '25%',
   },
   dateCell: {
     width: '20%',
   },
   timeCell: {
-    width: '15%',
+    width: '12%',
   },
   atelierCell: {
-    width: '20%',
+    width: '35%',
   },
   animateursCell: {
-    width: '15%',
+    width: '14%',
+  },
+  porteurCell: {
+    width: '14%',
+  },
+  atelierItem: {
+    marginBottom: 3,
+    paddingBottom: 3,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#E0E0E0',
+    borderBottomStyle: 'solid',
+  },
+  atelierTitle: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  atelierDescription: {
+    fontSize: 8,
+    color: '#555555',
+    fontStyle: 'italic',
+  },
+  multipleAteliers: {
+    flexDirection: 'column',
   },
   footer: {
     position: 'absolute',
@@ -147,8 +170,8 @@ export const CalendarPDF: React.FC<CalendarPDFProps> = ({
               <View style={[styles.tableRow, styles.tableHeader]}>
                 <Text style={[styles.tableCell, styles.titleCell]}>Titre</Text>
                 <Text style={[styles.tableCell, styles.timeCell]}>Horaire</Text>
-                <Text style={[styles.tableCell, styles.atelierCell]}>Atelier</Text>
-                <Text style={[styles.tableCell, styles.animateursCell]}>Porteur</Text>
+                <Text style={[styles.tableCell, styles.atelierCell]}>Ateliers & Descriptions</Text>
+                <Text style={[styles.tableCell, styles.porteurCell]}>Porteur</Text>
                 <Text style={[styles.tableCell, styles.animateursCell]}>Animateurs</Text>
               </View>
               
@@ -158,8 +181,30 @@ export const CalendarPDF: React.FC<CalendarPDFProps> = ({
                   <Text style={[styles.tableCell, styles.timeCell]}>
                     {formatTime(new Date(event.date_debut))} - {formatTime(new Date(event.date_fin))}
                   </Text>
-                  <Text style={[styles.tableCell, styles.atelierCell]}>{event.atelier.titre}</Text>
-                  <Text style={[styles.tableCell, styles.animateursCell]}>
+                  <View style={[styles.tableCell, styles.atelierCell]}>
+                    {event.ateliers && event.ateliers.length > 0 ? (
+                      <View style={styles.multipleAteliers}>
+                        {event.ateliers.map((atelierRel: any, index: number) => (
+                          <View key={index} style={[
+                            styles.atelierItem,
+                            index === event.ateliers.length - 1 ? { borderBottomWidth: 0 } : {}
+                          ]}>
+                            <Text style={styles.atelierTitle}>
+                              {atelierRel.atelier.titre}
+                            </Text>
+                            {atelierRel.atelier.description && (
+                              <Text style={styles.atelierDescription}>
+                                {atelierRel.atelier.description}
+                              </Text>
+                            )}
+                          </View>
+                        ))}
+                      </View>
+                    ) : (
+                      <Text style={styles.atelierTitle}>Aucun atelier</Text>
+                    )}
+                  </View>
+                  <Text style={[styles.tableCell, styles.porteurCell]}>
                     {event.porteurProjet.prenom} {event.porteurProjet.nom}
                   </Text>
                   <Text style={[styles.tableCell, styles.animateursCell]}>

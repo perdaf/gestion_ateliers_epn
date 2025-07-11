@@ -11,6 +11,7 @@ import { generateRandomColor } from '@/lib/utils';
 // Define the form schema using Zod
 const atelierSchema = z.object({
   titre: z.string().min(1, 'Le titre est requis'),
+  description: z.string().optional(),
   duree_minutes: z.coerce.number().min(15, 'La durée minimum est de 15 minutes'),
   couleur: z.string().nullable().optional(),
 });
@@ -36,6 +37,7 @@ export default function AtelierForm({ atelier, onSuccess, onCancel }: AtelierFor
     resolver: zodResolver(atelierSchema),
     defaultValues: {
       titre: atelier?.titre || '',
+      description: atelier?.description || '',
       duree_minutes: atelier?.duree_minutes || 60,
       couleur: atelier?.couleur || generateRandomColor(),
     },
@@ -97,6 +99,22 @@ export default function AtelierForm({ atelier, onSuccess, onCancel }: AtelierFor
           />
           {errors.titre && (
             <p className="error-message">{errors.titre.message}</p>
+          )}
+        </div>
+
+        <div>
+          <label htmlFor="description" className="form-label">
+            Description (optionnelle)
+          </label>
+          <textarea
+            id="description"
+            rows={3}
+            className="form-input resize-none"
+            placeholder="Décrivez brièvement cet atelier..."
+            {...register('description')}
+          />
+          {errors.description && (
+            <p className="error-message">{errors.description.message}</p>
           )}
         </div>
 

@@ -5,12 +5,20 @@ export const evenementUniqueSchema = z.object({
   titre: z.string().min(1, 'Le titre est requis'),
   date_debut: z.date(),
   date_fin: z.date(),
-  atelierId: z.string({ required_error: "L'atelier est requis" }),
+  // Support both single atelier (backward compatibility) and multiple ateliers
+  atelierId: z.string().optional(),
+  atelierIds: z.array(z.string()).min(1, 'Au moins un atelier est requis').optional(),
   porteurProjetIds: z.array(z.string()).min(1, 'Au moins un porteur de projet requis'),
   animateursIds: z.array(z.string()).min(1, 'Au moins un animateur requis'),
 }).refine(data => data.date_fin > data.date_debut, {
   message: 'La date de fin doit être après la date de début',
   path: ['date_fin'],
+}).refine(data => {
+  // Either atelierId or atelierIds must be provided
+  return data.atelierId || (data.atelierIds && data.atelierIds.length > 0);
+}, {
+  message: 'Au moins un atelier doit être sélectionné',
+  path: ['atelierIds'],
 });
 
 // Pour un événement récurrent
@@ -36,7 +44,9 @@ export const evenementRecurrentSchema = z.object({
   ]).optional(),
   date_debut_serie: z.date(),
   date_fin_serie: z.date(),
-  atelierId: z.string({ required_error: "L'atelier est requis" }),
+  // Support both single atelier (backward compatibility) and multiple ateliers
+  atelierId: z.string().optional(),
+  atelierIds: z.array(z.string()).min(1, 'Au moins un atelier est requis').optional(),
   porteurProjetIds: z.array(z.string()).min(1, 'Au moins un porteur de projet requis'),
   animateursIds: z.array(z.string()).min(1, 'Au moins un animateur requis'),
 }).refine(data => data.date_fin_serie > data.date_debut_serie, {
@@ -55,6 +65,12 @@ export const evenementRecurrentSchema = z.object({
 }, {
   message: 'Pour une récurrence mensuelle, veuillez spécifier quelle occurrence du jour dans le mois',
   path: ['nth_of_month'],
+}).refine(data => {
+  // Either atelierId or atelierIds must be provided
+  return data.atelierId || (data.atelierIds && data.atelierIds.length > 0);
+}, {
+  message: 'Au moins un atelier doit être sélectionné',
+  path: ['atelierIds'],
 }).superRefine((data, ctx) => {
   // If nth_of_month is set, ensure frequency is MENSUELLE
   if (data.nth_of_month !== undefined && data.nth_of_month !== null && data.frequence !== 'MENSUELLE') {
@@ -75,7 +91,9 @@ export const evenementRecurrentSchema = z.object({
 // Helper function to convert string of comma-separated values to array of numbers
 export const parseJoursSemaine = (joursString: string): number[] => {
   if (!joursString) return [];
-  return joursString.split(',').map(jour => parseInt(jour.trim(), 10));
+  return joursString.split(',')
+    .map(jour => parseInt(jour.trim(), 10))
+    .filter(jour => !isNaN(jour) && jour >= 0 && jour <= 6); // Filter out invalid days
 };
 
 // Helper function to convert array of numbers to comma-separated string
